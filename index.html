@@ -1,0 +1,476 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Bluesky Bulk DM Tool</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            max-width: 700px;
+            margin: 0 auto;
+            padding: 20px;
+            background-color: #f5f5f5;
+        }
+        .container {
+            background: white;
+            padding: 30px;
+            border-radius: 10px;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+        }
+        h1 {
+            color: #1da1f2;
+            text-align: center;
+            margin-bottom: 30px;
+        }
+        .form-group {
+            margin-bottom: 20px;
+        }
+        label {
+            display: block;
+            margin-bottom: 5px;
+            font-weight: bold;
+            color: #333;
+        }
+        input[type="text"], input[type="password"], input[type="file"], textarea {
+            width: 100%;
+            padding: 10px;
+            border: 1px solid #ddd;
+            border-radius: 5px;
+            font-size: 16px;
+            box-sizing: border-box;
+        }
+        textarea {
+            min-height: 100px;
+            resize: vertical;
+            font-family: Arial, sans-serif;
+        }
+        .char-counter {
+            text-align: right;
+            font-size: 12px;
+            color: #666;
+            margin-top: 5px;
+        }
+        .char-counter.warning {
+            color: #ff6b35;
+        }
+        .char-counter.error {
+            color: #dc3545;
+        }
+        button {
+            background-color: #1da1f2;
+            color: white;
+            padding: 12px 24px;
+            border: none;
+            border-radius: 5px;
+            cursor: pointer;
+            font-size: 16px;
+            width: 100%;
+        }
+        button:hover {
+            background-color: #1991db;
+        }
+        button:disabled {
+            background-color: #cccccc;
+            cursor: not-allowed;
+        }
+        .log-container {
+            margin-top: 20px;
+            padding: 15px;
+            background-color: #f8f9fa;
+            border: 1px solid #dee2e6;
+            border-radius: 5px;
+            height: 350px;
+            overflow-y: auto;
+            font-family: monospace;
+            font-size: 14px;
+            white-space: pre-wrap;
+        }
+        .progress {
+            width: 100%;
+            height: 20px;
+            background-color: #f0f0f0;
+            border-radius: 10px;
+            margin-top: 10px;
+            overflow: hidden;
+            display: none;
+        }
+        .progress-bar {
+            height: 100%;
+            background-color: #1da1f2;
+            width: 0%;
+            transition: width 0.3s ease;
+        }
+        .warning {
+            background-color: #fff3cd;
+            border: 1px solid #ffeaa7;
+            color: #856404;
+            padding: 15px;
+            border-radius: 5px;
+            margin-bottom: 20px;
+        }
+        .danger {
+            background-color: #f8d7da;
+            border: 1px solid #f5c6cb;
+            color: #721c24;
+            padding: 15px;
+            border-radius: 5px;
+            margin-bottom: 20px;
+        }
+        .message-preview {
+            background-color: #e3f2fd;
+            border: 1px solid #bbdefb;
+            padding: 10px;
+            border-radius: 5px;
+            margin-top: 10px;
+            font-style: italic;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>💬 Bluesky Bulk DM Tool</h1>
+        
+        <div class="danger">
+            <strong>⚠️ IMPORTANT - READ BEFORE USE:</strong>
+            <ul style="margin: 5px 0; padding-left: 20px;">
+                <li><strong>Use Responsibly:</strong> Sending unsolicited DMs can be considered spam and may get your account suspended.</li>
+                <li><strong>Respect Privacy:</strong> Only message users who have explicitly consented to receive messages from you.</li>
+                <li><strong>Follow Bluesky ToS:</strong> Ensure your messages comply with Bluesky's Terms of Service and Community Guidelines.</li>
+                <li><strong>Rate Limits:</strong> We enforce strict rate limiting to prevent abuse (1 message per 10 seconds).</li>
+            </ul>
+        </div>
+
+        <div class="warning">
+            <strong>📋 Setup Instructions:</strong>
+            <ul style="margin: 5px 0; padding-left: 20px;">
+                <li>Use an App Password, not your main Bluesky password. Generate one at <a href="https://bsky.app/settings/app-passwords" target="_blank">bsky.app/settings/app-passwords</a></li>
+                <li>Excel file should have a "handle" column with Bluesky handles (e.g., username.bsky.social)</li>
+                <li>Test with a small group first before sending to larger lists</li>
+                <li>Keep messages short, friendly, and relevant</li>
+            </ul>
+        </div>
+
+        <form id="dmForm">
+            <div class="form-group">
+                <label for="handle">Your Bluesky Handle (e.g., yourname.bsky.social):</label>
+                <input type="text" id="handle" name="handle" required 
+                       placeholder="yourname.bsky.social">
+            </div>
+
+            <div class="form-group">
+                <label for="password">App Password:</label>
+                <input type="password" id="password" name="password" required 
+                       placeholder="Enter your app password">
+            </div>
+
+            <div class="form-group">
+                <label for="message">Message to Send:</label>
+                <textarea id="message" name="message" required 
+                          placeholder="Write your message here... Keep it friendly and relevant!"
+                          maxlength="1000"></textarea>
+                <div class="char-counter" id="charCounter">0/1000 characters</div>
+                <div class="message-preview" id="messagePreview" style="display: none;"></div>
+            </div>
+
+            <div class="form-group">
+                <label for="file">Excel File (with 'handle' column):</label>
+                <input type="file" id="file" name="file" accept=".xlsx,.xls" required>
+            </div>
+
+            <button type="button" id="sendBtn">💬 Send DMs (with confirmation)</button>
+        </form>
+
+        <div class="progress" id="progressContainer">
+            <div class="progress-bar" id="progressBar"></div>
+        </div>
+
+        <div class="log-container" id="logOutput"></div>
+    </div>
+
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+    <script>
+        let logOutput = document.getElementById('logOutput');
+        let progressBar = document.getElementById('progressBar');
+        let progressContainer = document.getElementById('progressContainer');
+        let sendBtn = document.getElementById('sendBtn');
+        let messageInput = document.getElementById('message');
+        let charCounter = document.getElementById('charCounter');
+        let messagePreview = document.getElementById('messagePreview');
+        let stopRequested = false;
+
+        // Character counter for message
+        messageInput.addEventListener('input', function() {
+            const length = this.value.length;
+            const maxLength = 1000;
+            charCounter.textContent = `${length}/${maxLength} characters`;
+            
+            if (length > maxLength * 0.9) {
+                charCounter.classList.add('warning');
+            } else {
+                charCounter.classList.remove('warning');
+            }
+            
+            if (length > maxLength) {
+                charCounter.classList.add('error');
+            } else {
+                charCounter.classList.remove('error');
+            }
+
+            // Update preview
+            if (this.value.trim()) {
+                messagePreview.textContent = `Preview: "${this.value}"`;
+                messagePreview.style.display = 'block';
+            } else {
+                messagePreview.style.display = 'none';
+            }
+        });
+
+        function log(message) {
+            const timestamp = new Date().toLocaleTimeString();
+            logOutput.textContent += `[${timestamp}] ${message}\n`;
+            logOutput.scrollTop = logOutput.scrollHeight;
+        }
+
+        function updateProgress(current, total) {
+            const percentage = (current / total) * 100;
+            progressBar.style.width = percentage + '%';
+            progressContainer.style.display = 'block';
+        }
+
+        function showStopButton() {
+            sendBtn.style.display = 'none';
+            
+            const stopBtn = document.createElement('button');
+            stopBtn.id = 'stopBtn';
+            stopBtn.textContent = '🛑 Stop Sending';
+            stopBtn.style.cssText = `
+                background-color: #dc3545; 
+                color: white; 
+                padding: 12px 24px; 
+                border: none; 
+                border-radius: 5px; 
+                cursor: pointer; 
+                font-size: 16px; 
+                width: 100%; 
+                margin-top: 10px;
+            `;
+            stopBtn.onclick = function() {
+                stopRequested = true;
+                log('🛑 Stop requested - finishing current message and stopping...');
+                stopBtn.disabled = true;
+                stopBtn.textContent = 'Stopping...';
+            };
+            
+            sendBtn.parentNode.appendChild(stopBtn);
+        }
+
+        function hideStopButton() {
+            const stopBtn = document.getElementById('stopBtn');
+            if (stopBtn) {
+                stopBtn.remove();
+            }
+            sendBtn.style.display = 'block';
+        }
+
+        sendBtn.addEventListener('click', async function() {
+            const handle = document.getElementById('handle').value;
+            const password = document.getElementById('password').value;
+            const message = document.getElementById('message').value.trim();
+            const fileInput = document.getElementById('file');
+            
+            if (!handle || !password || !message) {
+                alert('Please fill in all fields');
+                return;
+            }
+            
+            if (message.length > 1000) {
+                alert('Message is too long. Maximum 1000 characters allowed.');
+                return;
+            }
+            
+            if (!fileInput.files[0]) {
+                alert('Please select an Excel file');
+                return;
+            }
+
+            // Parse file first to show confirmation
+            let handles;
+            try {
+                log('📁 Reading Excel file...');
+                handles = await parseExcelFile(fileInput.files[0]);
+            } catch (error) {
+                alert('Error reading Excel file: ' + error.message);
+                return;
+            }
+
+            if (handles.length === 0) {
+                alert('No handles found in Excel file. Make sure you have a "handle" column.');
+                return;
+            }
+
+            // Confirmation dialog with details
+            const confirmMessage = `⚠️ FINAL CONFIRMATION ⚠️
+
+You are about to send the following message to ${handles.length} users:
+
+"${message}"
+
+Recipients: ${handles.slice(0, 5).join(', ')}${handles.length > 5 ? ` and ${handles.length - 5} more...` : ''}
+
+⚠️ IMPORTANT REMINDERS:
+- This action cannot be undone
+- Sending unsolicited DMs may violate Bluesky's Terms of Service
+- Your account could be suspended for spam
+- Only proceed if recipients have consented to receive messages
+
+Rate limiting: 1 message every 10 seconds (${Math.ceil(handles.length * 10 / 60)} minutes total)
+
+Do you want to proceed?`;
+
+            if (!confirm(confirmMessage)) {
+                log('❌ Operation cancelled by user');
+                return;
+            }
+
+            // Proceed with sending
+            stopRequested = false;
+            sendBtn.disabled = true;
+            logOutput.textContent = '';
+            showStopButton();
+            
+            try {
+                log(`📋 Found ${handles.length} handles to message`);
+                log(`💬 Message: "${message}"`);
+                log(`⏱️ Starting bulk DM process with 10-second delays...`);
+                
+                await bulkSendDMs(handle, password, handles, message);
+                
+            } catch (error) {
+                log(`❌ Error: ${error.message}`);
+            } finally {
+                sendBtn.disabled = false;
+                hideStopButton();
+                progressContainer.style.display = 'none';
+            }
+        });
+
+        async function parseExcelFile(file) {
+            return new Promise((resolve, reject) => {
+                const reader = new FileReader();
+                reader.onload = function(e) {
+                    try {
+                        const data = new Uint8Array(e.target.result);
+                        const workbook = XLSX.read(data, { type: 'array' });
+                        const firstSheet = workbook.Sheets[workbook.SheetNames[0]];
+                        const jsonData = XLSX.utils.sheet_to_json(firstSheet);
+                        
+                        const handles = jsonData
+                            .map(row => row.handle || row.Handle || row.HANDLE)
+                            .filter(handle => handle && typeof handle === 'string')
+                            .map(handle => handle.trim());
+                        
+                        resolve(handles);
+                    } catch (error) {
+                        reject(new Error('Failed to parse Excel file: ' + error.message));
+                    }
+                };
+                reader.onerror = () => reject(new Error('Failed to read file'));
+                reader.readAsArrayBuffer(file);
+            });
+        }
+
+        async function bulkSendDMs(handle, password, handlesToMessage, message) {
+            let successCount = 0;
+            let failCount = 0;
+            const maxRetries = 1; // Fewer retries for DMs to avoid spam detection
+            
+            for (let i = 0; i < handlesToMessage.length; i++) {
+                if (stopRequested) {
+                    log(`🛑 Process stopped by user at ${i + 1}/${handlesToMessage.length}`);
+                    break;
+                }
+
+                const targetHandle = handlesToMessage[i];
+                let retryCount = 0;
+                let success = false;
+                
+                updateProgress(i + 1, handlesToMessage.length);
+                
+                while (retryCount <= maxRetries && !success && !stopRequested) {
+                    try {
+                        const response = await fetch('/api/dm', {
+                            method: 'POST',
+                            headers: {
+                                'Content-Type': 'application/json',
+                            },
+                            body: JSON.stringify({
+                                userHandle: handle,
+                                userPassword: password,
+                                targetHandle: targetHandle,
+                                message: message
+                            })
+                        });
+                        
+                        const contentType = response.headers.get('content-type');
+                        if (!contentType || !contentType.includes('application/json')) {
+                            const text = await response.text();
+                            log(`❌ Failed to message ${targetHandle}: Server error`);
+                            failCount++;
+                            success = true;
+                            break;
+                        }
+                        
+                        const result = await response.json();
+                        
+                        if (result.success) {
+                            log(`💬 Successfully sent DM to ${targetHandle}`);
+                            successCount++;
+                            success = true;
+                        } else {
+                            if (result.error_type === 'RateLimit') {
+                                retryCount++;
+                                if (retryCount <= maxRetries) {
+                                    const waitTime = 60; // Fixed 60s wait for rate limits
+                                    log(`⚠️ Rate limit hit for ${targetHandle}. Pausing for ${waitTime} seconds...`);
+                                    await new Promise(resolve => setTimeout(resolve, waitTime * 1000));
+                                } else {
+                                    log(`❌ Skipping ${targetHandle} due to persistent rate limiting`);
+                                    failCount++;
+                                    success = true;
+                                }
+                            } else {
+                                log(`❌ Failed to message ${targetHandle}: ${result.error}`);
+                                failCount++;
+                                success = true;
+                            }
+                        }
+                    } catch (error) {
+                        log(`❌ Failed to message ${targetHandle}: ${error.message}`);
+                        failCount++;
+                        success = true;
+                        break;
+                    }
+                }
+
+                // Mandatory delay between messages (even on failures) to prevent spam detection
+                if (i < handlesToMessage.length - 1 && !stopRequested) {
+                    log(`⏱️ Waiting 10 seconds before next message...`);
+                    await new Promise(resolve => setTimeout(resolve, 10000));
+                }
+            }
+            
+            // Final summary
+            const total = successCount + failCount;
+            log(`\n🎉 DM campaign completed!`);
+            log(`💬 Successfully sent: ${successCount} messages`);
+            log(`❌ Failed: ${failCount} messages`);
+            log(`📊 Total processed: ${total}/${handlesToMessage.length} users`);
+            
+            if (stopRequested) {
+                log(`\n🛑 Process was stopped early by user request.`);
+            }
+        }
+    </script>
+</body>
+</html>
