@@ -125,6 +125,71 @@
             margin-top: 10px;
             font-style: italic;
         }
+        .link-tools {
+            background-color: #f8f9fa;
+            border: 1px solid #e9ecef;
+            border-radius: 5px;
+            padding: 15px;
+            margin-top: 10px;
+            margin-bottom: 10px;
+        }
+        .link-helper {
+            margin-bottom: 15px;
+        }
+        .link-inputs {
+            display: flex;
+            gap: 10px;
+            margin-top: 8px;
+            flex-wrap: wrap;
+        }
+        .link-inputs input {
+            flex: 1;
+            min-width: 200px;
+            padding: 8px;
+            border: 1px solid #ddd;
+            border-radius: 3px;
+            font-size: 14px;
+        }
+        .link-inputs button {
+            background-color: #28a745;
+            color: white;
+            border: none;
+            padding: 8px 16px;
+            border-radius: 3px;
+            cursor: pointer;
+            font-size: 14px;
+            white-space: nowrap;
+        }
+        .link-inputs button:hover {
+            background-color: #218838;
+        }
+        .link-templates {
+            margin-top: 10px;
+        }
+        .template-buttons {
+            display: flex;
+            gap: 8px;
+            margin-top: 8px;
+            flex-wrap: wrap;
+        }
+        .template-btn {
+            background-color: #6c757d;
+            color: white;
+            border: none;
+            padding: 6px 12px;
+            border-radius: 3px;
+            cursor: pointer;
+            font-size: 12px;
+            white-space: nowrap;
+        }
+        .template-btn:hover {
+            background-color: #5a6268;
+        }
+        .preview-link {
+            color: #1da1f2;
+            text-decoration: underline;
+            cursor: pointer;
+        }
     </style>
 </head>
 <body>
@@ -148,6 +213,8 @@
                 <li>Excel file should have a "handle" column with Bluesky handles (e.g., username.bsky.social)</li>
                 <li>Test with a small group first before sending to larger lists</li>
                 <li>Keep messages short, friendly, and relevant</li>
+                <li><strong>🔗 Links:</strong> Use the link helper tools below or type full URLs directly (https://example.com)</li>
+                <li><strong>✨ Auto-Clickable:</strong> URLs will automatically become clickable links in Bluesky DMs</li>
             </ul>
         </div>
 
@@ -167,8 +234,33 @@
             <div class="form-group">
                 <label for="message">Message to Send:</label>
                 <textarea id="message" name="message" required 
-                          placeholder="Write your message here... Keep it friendly and relevant!"
+                          placeholder="Write your message here... Keep it friendly and relevant!&#10;&#10;💡 Add links by typing full URLs (e.g., https://example.com)&#10;Links will automatically be clickable in Bluesky!"
                           maxlength="1000"></textarea>
+                
+                <!-- Link Helper Tools -->
+                <div class="link-tools">
+                    <div class="link-helper">
+                        <strong>🔗 Quick Link Helper:</strong>
+                        <div class="link-inputs">
+                            <input type="text" id="linkText" placeholder="Link text (e.g., 'Visit our website')" />
+                            <input type="url" id="linkUrl" placeholder="URL (e.g., https://example.com)" />
+                            <button type="button" id="insertLinkBtn">Insert Link</button>
+                        </div>
+                        <small style="color: #666; font-size: 11px; margin-top: 5px; display: block;">
+                            💡 Tip: Press Ctrl+K (or Cmd+K) to quickly focus the URL field, or just paste URLs directly into your message
+                        </small>
+                    </div>
+                    
+                    <div class="link-templates">
+                        <strong>📋 Common Templates:</strong>
+                        <div class="template-buttons">
+                            <button type="button" class="template-btn" data-template="Check out our website: https://example.com">Website Link</button>
+                            <button type="button" class="template-btn" data-template="Follow us: https://bsky.app/profile/yourhandle.bsky.social">Bluesky Profile</button>
+                            <button type="button" class="template-btn" data-template="Learn more: https://example.com/learn-more">Learn More</button>
+                        </div>
+                    </div>
+                </div>
+                
                 <div class="char-counter" id="charCounter">0/1000 characters</div>
                 <div class="message-preview" id="messagePreview" style="display: none;"></div>
             </div>
@@ -199,7 +291,92 @@
         let messagePreview = document.getElementById('messagePreview');
         let stopRequested = false;
 
-        // Character counter for message
+        // Link helper elements
+        let linkTextInput = document.getElementById('linkText');
+        let linkUrlInput = document.getElementById('linkUrl');
+        let insertLinkBtn = document.getElementById('insertLinkBtn');
+
+        // Insert link functionality
+        insertLinkBtn.addEventListener('click', function() {
+            const linkText = linkTextInput.value.trim();
+            const linkUrl = linkUrlInput.value.trim();
+            
+            if (!linkUrl) {
+                alert('Please enter a URL');
+                return;
+            }
+            
+            let linkToInsert;
+            if (linkText) {
+                linkToInsert = `${linkText}: ${linkUrl}`;
+            } else {
+                linkToInsert = linkUrl;
+            }
+            
+            // Insert at cursor position or append
+            const cursorPos = messageInput.selectionStart;
+            const textBefore = messageInput.value.substring(0, cursorPos);
+            const textAfter = messageInput.value.substring(messageInput.selectionEnd);
+            
+            messageInput.value = textBefore + linkToInsert + textAfter;
+            messageInput.focus();
+            
+            // Clear the helper inputs
+            linkTextInput.value = '';
+            linkUrlInput.value = '';
+            
+            // Trigger the input event to update preview and counter
+            messageInput.dispatchEvent(new Event('input'));
+        });
+
+        // Template button functionality
+        document.querySelectorAll('.template-btn').forEach(btn => {
+            btn.addEventListener('click', function() {
+                const template = this.dataset.template;
+                const cursorPos = messageInput.selectionStart;
+                const textBefore = messageInput.value.substring(0, cursorPos);
+                const textAfter = messageInput.value.substring(messageInput.selectionEnd);
+                
+                messageInput.value = textBefore + template + textAfter;
+                messageInput.focus();
+                messageInput.dispatchEvent(new Event('input'));
+            });
+        });
+
+        // Keyboard shortcuts
+        document.addEventListener('keydown', function(e) {
+            // Ctrl+K or Cmd+K to focus link URL input
+            if ((e.ctrlKey || e.metaKey) && e.key === 'k') {
+                e.preventDefault();
+                linkUrlInput.focus();
+            }
+            
+            // Enter in link inputs to insert link
+            if (e.target === linkUrlInput && e.key === 'Enter') {
+                e.preventDefault();
+                insertLinkBtn.click();
+            }
+        });
+
+        // Auto-detect and suggest URLs when pasting
+        messageInput.addEventListener('paste', function(e) {
+            setTimeout(() => {
+                const text = this.value;
+                const urlMatch = text.match(/https?:\/\/[^\s]+/);
+                if (urlMatch && !linkUrlInput.value) {
+                    linkUrlInput.value = urlMatch[0];
+                }
+                this.dispatchEvent(new Event('input'));
+            }, 10);
+        });
+
+        // Enhanced character counter and preview with link detection
+        function makeLinksClickable(text) {
+            // Regex to detect URLs
+            const urlRegex = /(https?:\/\/[^\s]+)/g;
+            return text.replace(urlRegex, '<span class="preview-link">$1</span>');
+        }
+
         messageInput.addEventListener('input', function() {
             const length = this.value.length;
             const maxLength = 1000;
@@ -217,9 +394,10 @@
                 charCounter.classList.remove('error');
             }
 
-            // Update preview
+            // Enhanced preview with clickable links
             if (this.value.trim()) {
-                messagePreview.textContent = `Preview: "${this.value}"`;
+                const previewText = makeLinksClickable(this.value);
+                messagePreview.innerHTML = `Preview: "${previewText}"`;
                 messagePreview.style.display = 'block';
             } else {
                 messagePreview.style.display = 'none';
@@ -319,10 +497,10 @@ You are about to send the following message to ${handles.length} users:
 Recipients: ${handles.slice(0, 5).join(', ')}${handles.length > 5 ? ` and ${handles.length - 5} more...` : ''}
 
 ⚠️ IMPORTANT REMINDERS:
-- This action cannot be undone
-- Sending unsolicited DMs may violate Bluesky's Terms of Service
-- Your account could be suspended for spam
-- Only proceed if recipients have consented to receive messages
+• This action cannot be undone
+• Sending unsolicited DMs may violate Bluesky's Terms of Service
+• Your account could be suspended for spam
+• Only proceed if recipients have consented to receive messages
 
 Rate limiting: 1 message every 10 seconds (${Math.ceil(handles.length * 10 / 60)} minutes total)
 
