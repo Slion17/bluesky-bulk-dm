@@ -2,6 +2,7 @@ from http.server import BaseHTTPRequestHandler
 import json
 import traceback
 import time
+import re
 
 class handler(BaseHTTPRequestHandler):
     def do_POST(self):
@@ -23,6 +24,7 @@ class handler(BaseHTTPRequestHandler):
             user_password = data.get('userPassword')
             target_handle = data.get('targetHandle')
             message = data.get('message')
+            embedded_links = data.get('embeddedLinks', [])  # New: array of {text, url, start, end}
             
             if not all([user_handle, user_password, target_handle, message]):
                 self.wfile.write(json.dumps({
@@ -40,7 +42,7 @@ class handler(BaseHTTPRequestHandler):
                 return
             
             # Import atproto inside the try block to catch import errors
-            from atproto import Client, models
+            from atproto import Client, models, client_utils
             from atproto.exceptions import RequestException
             
             # Login to Bluesky
@@ -67,67 +69,122 @@ class handler(BaseHTTPRequestHandler):
                 }).encode())
                 return
             
+            # Prepare message with rich text facets if embedded links are provided
+            message_content = None
+            if embedded_links:
+                # Use TextBuilder for rich text with embedded links
+                try:
+                    text_builder = client_utils.TextBuilder()
+                    
+                    # Sort embedded links by start position to process in order
+                    sorted_links = sorted(embedded_links, key=lambda x: x.get('start', 0))
+                    
+                    last_pos = 0
+                    for link in sorted_links:
+                        link_text = link.get('text', '')
+                        link_url = link.get('url', '')
+                        start_pos = link.get('start', 0)
+                        end_pos = link.get('end', start_pos + len(link_text))
+                        
+                        if start_pos > last_pos:
+                            # Add text before the link
+                            text_builder.text(message[last_pos:start_pos])
+                        
+                        # Add the embedded link
+                        text_builder.link(link_text, link_url)
+                        last_pos = end_pos
+                    
+                    # Add any remaining text after the last link
+                    if last_pos < len(message):
+                        text_builder.text(message[last_pos:])
+                    
+                    message_content = text_builder
+                    
+                except Exception as e:
+                    # Fallback to simple text if TextBuilder fails
+                    self.wfile.write(json.dumps({
+                        'success': False,
+                        'error': f'Rich text processing failed: {str(e)}. Using simple text instead.',
+                        'error_type': 'RichTextError'
+                    }).encode())
+                    return
+            else:
+                # Simple text message with auto-detected links
+                try:
+                    # Try to auto-detect and parse links in the message
+                    text_builder = client_utils.TextBuilder()
+                    
+                    # Auto-detect URLs in the text
+                    url_pattern = r'https?://[^\s]+'
+                    urls = list(re.finditer(url_pattern, message))
+                    
+                    if urls:
+                        last_pos = 0
+                        for match in urls:
+                            # Add text before URL
+                            if match.start() > last_pos:
+                                text_builder.text(message[last_pos:match.start()])
+                            
+                            # Add the URL as a link
+                            url = match.group()
+                            text_builder.link(url, url)
+                            last_pos = match.end()
+                        
+                        # Add any remaining text
+                        if last_pos < len(message):
+                            text_builder.text(message[last_pos:])
+                        
+                        message_content = text_builder
+                    else:
+                        # No URLs found, use simple text
+                        message_content = message
+                        
+                except Exception:
+                    # Fallback to simple text
+                    message_content = message
+            
             # Try to send the DM
             try:
-                # Note: The exact API endpoints for chat may vary depending on atproto version
-                # We'll try multiple approaches to handle different API versions
+                # Create DM client
+                dm_client = client.with_bsky_chat_proxy()
                 
-                # Method 1: Try direct message sending (newer API)
+                # Get or create conversation
                 try:
-                    # Some versions of atproto may have direct DM methods
-                    if hasattr(client, 'send_message'):
-                        result = client.send_message(target_did, message)
-                    else:
-                        # Method 2: Use chat conversation API
-                        # First get or create conversation
-                        convo_response = client.com.atproto.server.create_session if hasattr(client, 'com') else None
-                        
-                        # Try getting existing conversations
-                        if hasattr(client, 'chat') and hasattr(client.chat, 'bsky'):
-                            convos = client.chat.bsky.convo.list_convos({'limit': 50})
-                            
-                            # Look for existing conversation with target
-                            existing_convo = None
-                            if hasattr(convos, 'convos'):
-                                for convo in convos.convos:
-                                    if hasattr(convo, 'members'):
-                                        member_dids = [getattr(m, 'did', '') for m in convo.members]
-                                        if target_did in member_dids:
-                                            existing_convo = convo.id
-                                            break
-                            
-                            # Get or create conversation
-                            if existing_convo:
-                                convo_id = existing_convo
-                            else:
-                                # Create new conversation
-                                new_convo = client.chat.bsky.convo.get_convo_for_members({
-                                    'members': [target_did]
-                                })
-                                convo_id = new_convo.convo.id
-                            
-                            # Send message to conversation
-                            send_result = client.chat.bsky.convo.send_message({
-                                'convoId': convo_id,
-                                'message': {'text': message}
-                            })
-                        else:
-                            # Fallback: Try alternative chat API structure
-                            # This handles different versions of the atproto library
-                            raise Exception("Chat API not available in this atproto version")
+                    convo_response = dm_client.chat.bsky.convo.get_convo_for_members(
+                        models.ChatBskyConvoGetConvoForMembers.Params(members=[target_did])
+                    )
+                    convo_id = convo_response.convo.id
+                except Exception as e:
+                    self.wfile.write(json.dumps({
+                        'success': False,
+                        'error': f'Could not create conversation with {target_handle}. User may have DMs disabled or blocked you.',
+                        'error_type': 'ConversationError'
+                    }).encode())
+                    return
                 
-                except Exception as chat_error:
-                    # If chat API fails, try alternative approaches or provide helpful error
-                    error_msg = str(chat_error).lower()
-                    if 'not found' in error_msg or 'unknown' in error_msg:
-                        raise Exception("Direct messaging may not be available in this version of Bluesky API")
-                    else:
-                        raise chat_error
+                # Send the message with rich text support
+                if isinstance(message_content, client_utils.TextBuilder):
+                    # Send rich text message
+                    message_data = models.ChatBskyConvoDefs.MessageInput(
+                        text=message_content.build_text(),
+                        facets=message_content.build_facets()
+                    )
+                else:
+                    # Send simple text message
+                    message_data = models.ChatBskyConvoDefs.MessageInput(text=message_content)
+                
+                send_response = dm_client.chat.bsky.convo.send_message(
+                    models.ChatBskyConvoSendMessage.Data(
+                        convo_id=convo_id,
+                        message=message_data
+                    )
+                )
                 
                 self.wfile.write(json.dumps({
                     'success': True,
                     'message': f'Successfully sent DM to {target_handle}',
-                    'target_handle': target_handle
+                    'target_handle': target_handle,
+                    'rich_text_used': isinstance(message_content, client_utils.TextBuilder)
                 }).encode())
                 
             except Exception as e:
