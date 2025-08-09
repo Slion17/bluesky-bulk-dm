@@ -190,6 +190,46 @@
             text-decoration: underline;
             cursor: pointer;
         }
+        .embedded-links-preview {
+            background-color: #f0f8ff;
+            border: 1px solid #b3d9ff;
+            border-radius: 5px;
+            padding: 10px;
+            margin-top: 10px;
+        }
+        .embedded-links-preview ul {
+            margin: 5px 0;
+            padding-left: 20px;
+        }
+        .embedded-links-preview li {
+            margin: 3px 0;
+            font-size: 12px;
+        }
+        .embedded-link-item {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+        .remove-link-btn {
+            background-color: #dc3545;
+            color: white;
+            border: none;
+            border-radius: 3px;
+            padding: 2px 6px;
+            font-size: 10px;
+            cursor: pointer;
+        }
+        .remove-link-btn:hover {
+            background-color: #c82333;
+        }
+        .integration-tip {
+            background-color: #e8f4fd;
+            border: 1px solid #bee5eb;
+            border-radius: 5px;
+            padding: 10px;
+            margin-top: 10px;
+            font-size: 13px;
+        }
     </style>
 </head>
 <body>
@@ -213,8 +253,9 @@
                 <li>Excel file should have a "handle" column with Bluesky handles (e.g., username.bsky.social)</li>
                 <li>Test with a small group first before sending to larger lists</li>
                 <li>Keep messages short, friendly, and relevant</li>
-                <li><strong>🔗 Links:</strong> Use the link helper tools below or type full URLs directly (https://example.com)</li>
-                <li><strong>✨ Auto-Clickable:</strong> URLs will automatically become clickable links in Bluesky DMs</li>
+                <li><strong>🔗 Embedded Links:</strong> Use the link helper to create custom clickable text!</li>
+                <li><strong>✨ Auto-Links:</strong> Regular URLs will still be auto-detected and made clickable</li>
+                <li><strong>🎯 Rich Text:</strong> Combine embedded links with regular text for professional messages</li>
             </ul>
         </div>
 
@@ -234,29 +275,59 @@
             <div class="form-group">
                 <label for="message">Message to Send:</label>
                 <textarea id="message" name="message" required 
-                          placeholder="Write your message here... Keep it friendly and relevant!&#10;&#10;💡 Add links by typing full URLs (e.g., https://example.com)&#10;Links will automatically be clickable in Bluesky!"
+                          placeholder="Write your message here... 
+
+💡 NEW: Create embedded links using the link helper below!
+Example: 'Check out our latest guide' (where 'latest guide' becomes clickable)
+
+You can also type regular URLs directly - they'll auto-detect!"
                           maxlength="1000"></textarea>
                 
                 <!-- Link Helper Tools -->
                 <div class="link-tools">
+                    <div class="integration-tip">
+                        <strong>✅ EMBEDDED LINKS NOW SUPPORTED!</strong><br>
+                        You CAN create hidden/embedded links like "[Click here]" that link to any URL!
+                        <br><br>
+                        ✅ <strong>Embedded:</strong> Custom text that links to a URL (like the message you showed)<br>
+                        ✅ <strong>Auto-detected:</strong> Full URLs will automatically become clickable<br>
+                        ✅ <strong>Mixed:</strong> Combine both embedded and regular links in one message
+                    </div>
+                    
                     <div class="link-helper">
-                        <strong>🔗 Quick Link Helper:</strong>
+                        <strong>🔗 Create Embedded Links:</strong>
                         <div class="link-inputs">
-                            <input type="text" id="linkText" placeholder="Link text (e.g., 'Visit our website')" />
+                            <input type="text" id="linkText" placeholder="Custom text (e.g., 'Click here', 'See our guide')" />
                             <input type="url" id="linkUrl" placeholder="URL (e.g., https://example.com)" />
-                            <button type="button" id="insertLinkBtn">Insert Link</button>
+                            <button type="button" id="insertLinkBtn">Insert Embedded Link</button>
                         </div>
                         <small style="color: #666; font-size: 11px; margin-top: 5px; display: block;">
-                            💡 Tip: Press Ctrl+K (or Cmd+K) to quickly focus the URL field, or just paste URLs directly into your message
+                            💡 Creates embedded links where custom text is clickable | Press Ctrl+K to focus URL field
                         </small>
+                        
+                        <div class="embedded-links-preview" id="embeddedLinksPreview" style="display: none;">
+                            <strong>📋 Embedded Links in this message:</strong>
+                            <ul id="embeddedLinksList"></ul>
+                        </div>
                     </div>
                     
                     <div class="link-templates">
-                        <strong>📋 Common Templates:</strong>
+                        <strong>📋 Link Templates & Examples:</strong>
                         <div class="template-buttons">
-                            <button type="button" class="template-btn" data-template="Check out our website: https://example.com">Website Link</button>
-                            <button type="button" class="template-btn" data-template="Follow us: https://bsky.app/profile/yourhandle.bsky.social">Bluesky Profile</button>
-                            <button type="button" class="template-btn" data-template="Learn more: https://example.com/learn-more">Learn More</button>
+                            <button type="button" class="template-btn" data-template="Check out our website at ">Website Example</button>
+                            <button type="button" class="template-btn" data-template="Follow us on Bluesky: ">Profile Example</button>
+                            <button type="button" class="template-btn" data-template="Read the full article: ">Article Example</button>
+                            <button type="button" class="template-btn" data-template="🔗 ">Icon + Space</button>
+                            <button type="button" class="template-btn" data-template="Learn more → ">Arrow Style</button>
+                        </div>
+                        <div style="margin-top: 10px;">
+                            <strong>💡 Pro Tip:</strong>
+                            <small style="color: #666; font-size: 11px; display: block; margin-top: 5px;">
+                                With embedded links, you can now create clean messages like:<br>
+                                • "Check out our <em>latest blog post</em>" (where "latest blog post" is clickable)<br>
+                                • "Download the <em>free guide</em> to get started" (where "free guide" is clickable)<br>
+                                • Mix embedded links with regular URLs for maximum flexibility!
+                            </small>
                         </div>
                     </div>
                 </div>
@@ -295,8 +366,10 @@
         let linkTextInput = document.getElementById('linkText');
         let linkUrlInput = document.getElementById('linkUrl');
         let insertLinkBtn = document.getElementById('insertLinkBtn');
+        let longUrlInput = document.getElementById('longUrl');
+        let shortenBtn = document.getElementById('shortenBtn');
 
-        // Insert link functionality
+        // Enhanced insert link functionality with smart formatting
         insertLinkBtn.addEventListener('click', function() {
             const linkText = linkTextInput.value.trim();
             const linkUrl = linkUrlInput.value.trim();
@@ -308,7 +381,8 @@
             
             let linkToInsert;
             if (linkText) {
-                linkToInsert = `${linkText}: ${linkUrl}`;
+                // Create natural-looking embedded text
+                linkToInsert = `${linkText} ${linkUrl}`;
             } else {
                 linkToInsert = linkUrl;
             }
@@ -327,6 +401,44 @@
             
             // Trigger the input event to update preview and counter
             messageInput.dispatchEvent(new Event('input'));
+        });
+
+        // URL shortener helper
+        shortenBtn.addEventListener('click', function() {
+            const longUrl = longUrlInput.value.trim();
+            
+            if (!longUrl) {
+                alert('Please enter a URL to shorten');
+                return;
+            }
+            
+            // Provide instructions for manual shortening
+            const instructions = `📋 TO SHORTEN YOUR URL:
+
+1. Copy this URL: ${longUrl}
+
+2. Visit one of these services:
+   • bit.ly
+   • tinyurl.com  
+   • t.co
+   • rebrandly.com
+
+3. Paste your URL and create a short link
+
+4. Copy the short link back to your message
+
+This creates cleaner, more integrated links like:
+"Check it out: bit.ly/abc123" instead of
+"Check it out: ${longUrl}"`;
+
+            alert(instructions);
+            
+            // Copy URL to clipboard if possible
+            if (navigator.clipboard) {
+                navigator.clipboard.writeText(longUrl).then(() => {
+                    console.log('URL copied to clipboard');
+                });
+            }
         });
 
         // Template button functionality
@@ -488,19 +600,24 @@
             }
 
             // Confirmation dialog with details
+            const hasEmbeddedLinks = embeddedLinks.length > 0;
+            const embeddedLinksText = hasEmbeddedLinks ? 
+                `\n\n📋 EMBEDDED LINKS (${embeddedLinks.length}):\n${embeddedLinks.map(link => `• "${link.text}" → ${link.url}`).join('\n')}` : '';
+            
             const confirmMessage = `⚠️ FINAL CONFIRMATION ⚠️
 
 You are about to send the following message to ${handles.length} users:
 
-"${message}"
+"${message}"${embeddedLinksText}
 
 Recipients: ${handles.slice(0, 5).join(', ')}${handles.length > 5 ? ` and ${handles.length - 5} more...` : ''}
 
 ⚠️ IMPORTANT REMINDERS:
 • This action cannot be undone
-• Sending unsolicited DMs may violate Bluesky's Terms of Service
+• Sending unsolicited DMs may violate Bluesky's Terms of Service  
 • Your account could be suspended for spam
 • Only proceed if recipients have consented to receive messages
+${hasEmbeddedLinks ? '• Your embedded links will be properly formatted and clickable' : ''}
 
 Rate limiting: 1 message every 10 seconds (${Math.ceil(handles.length * 10 / 60)} minutes total)
 
@@ -586,7 +703,8 @@ Do you want to proceed?`;
                                 userHandle: handle,
                                 userPassword: password,
                                 targetHandle: targetHandle,
-                                message: message
+                                message: message,
+                                embeddedLinks: embeddedLinks // Include embedded links data
                             })
                         });
                         
@@ -602,7 +720,8 @@ Do you want to proceed?`;
                         const result = await response.json();
                         
                         if (result.success) {
-                            log(`💬 Successfully sent DM to ${targetHandle}`);
+                            const richTextIndicator = result.rich_text_used ? ' (with embedded links)' : '';
+                            log(`💬 Successfully sent DM to ${targetHandle}${richTextIndicator}`);
                             successCount++;
                             success = true;
                         } else {
